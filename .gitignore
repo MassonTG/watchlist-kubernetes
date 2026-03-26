@@ -1,0 +1,9 @@
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+docker/backend/venv/
+docker/backend/logs/
+**/__pycache__/
+*.pem
+/tmp/

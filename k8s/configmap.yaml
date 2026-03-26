@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: watchlist-config
+  namespace: watchlist
+data:
+  ALGORITHM: "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
+  REDIS_URL: "redis://redis:6379/0"
+  DATABASE_URL: "postgresql://watchlist_user:watchlist_pass@postgres:5432/watchlist_db"

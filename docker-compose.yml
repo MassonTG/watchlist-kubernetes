@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: watchlist_db
+      POSTGRES_USER: watchlist_user
+      POSTGRES_PASSWORD: watchlist_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U watchlist_user -d watchlist_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  fastapi:
+    build: ./docker/backend
+    environment:
+      DATABASE_URL: postgresql://watchlist_user:watchlist_pass@postgres:5432/watchlist_db
+      SECRET_KEY: super-secret-key-change-in-production
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 1440
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  celery:
+    build: ./docker/backend
+    command: celery -A app.worker.celery_app:celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql://watchlist_user:watchlist_pass@postgres:5432/watchlist_db
+      SECRET_KEY: super-secret-key-change-in-production
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 1440
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./docker/frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - fastapi
+
+volumes:
+  postgres_data:
