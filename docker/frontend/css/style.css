@@ -194,7 +194,6 @@ body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-ser
 
 /* Відносне позиціювання для дропдауну */
 #modal .form-group:first-child { position: relative; }
-/* ===== ДОДАТИ В КІНЕЦЬ style.css ===== */
 
 /* OMDB DROPDOWN */
 .omdb-dropdown {
