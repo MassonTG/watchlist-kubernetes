@@ -56,11 +56,6 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: Install SecureScan dependencies
-        run: |
-          pip install --quiet pyyaml typer uvicorn fastapi starlette python-multipart
-          echo "✅ Dependencies installed"
-
       - name: Checkout SecureScan
         uses: actions/checkout@v4
         with:
@@ -69,6 +64,11 @@ jobs:
           ref: main
           token: ${{ secrets.SECURESCAN_TOKEN }}
 
+      - name: Install SecureScan
+        run: |
+          pip install --quiet -e securescan/
+          echo "✅ SecureScan installed"
+
       - name: Create reports directory
         run: mkdir -p reports
 
@@ -76,9 +76,8 @@ jobs:
         id: scan
         run: |
           FAIL_ON="${{ github.event.inputs.fail_on || env.FAIL_ON }}"
-          SECURESCAN="${{ github.workspace }}/securescan"
 
-          PYTHONPATH="$SECURESCAN" python "$SECURESCAN/cli/main.py" scan             "${{ github.workspace }}/${{ env.SCAN_PATH }}" \
+          python -m cli.main scan             "${{ github.workspace }}/${{ env.SCAN_PATH }}" \
             --json   "${{ github.workspace }}/reports/securescan.json" \
             --sarif  "${{ github.workspace }}/reports/securescan.sarif" \
             --html   "${{ github.workspace }}/reports/securescan.html" \
