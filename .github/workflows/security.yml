@@ -1,0 +1,176 @@
+# .github/workflows/security.yml
+#
+# SecureScan — автоматичний аудит безпеки Docker та Kubernetes конфігів
+#
+# ══════════════════════════════════════════════════════════════════════
+#  ЯК ДОДАТИ У СВІЙ ПРОЄКТ:
+#  1. Скопіюй цей файл у .github/workflows/security.yml
+#  2. За потреби створи .securescanignore щоб виключити файли
+#  3. Налаштуй SCAN_PATH та FAIL_ON нижче
+# ══════════════════════════════════════════════════════════════════════
+
+name: SecureScan Security Analysis
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - '**/Dockerfile*'
+      - '**/*.yaml'
+      - '**/*.yml'
+      - '**/.env*'
+      - '**/docker-compose*'
+  pull_request:
+    branches: [ main, master, develop ]
+    paths:
+      - '**/Dockerfile*'
+      - '**/*.yaml'
+      - '**/*.yml'
+      - '**/.env*'
+      - '**/docker-compose*'
+  workflow_dispatch:
+    inputs:
+      fail_on:
+        description: 'Мінімальний рівень для fail pipeline'
+        required: false
+        default: 'high'
+        type: choice
+        options: [ critical, high, medium, low ]
+  schedule:
+    - cron: '0 8 * * 1'
+
+env:
+  # ── Налаштуй під свій проєкт ──────────────────────────────────────
+  SCAN_PATH: "."          # що сканувати (. = весь репозиторій)
+  FAIL_ON: "high"         # critical / high / medium / low
+  SECURESCAN_REPO: "https://github.com/MassonTG/securescan"
+  SECURESCAN_VERSION: "main"
+  # ─────────────────────────────────────────────────────────────────
+
+jobs:
+  securescan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      # Клонуємо SecureScan окремо — не залежить від того
+      # чи є він у репозиторії користувача
+      - name: Install SecureScan
+        run: |
+          git clone --depth=1 ${{ env.SECURESCAN_REPO }} /tmp/securescan
+          pip install --quiet -r /tmp/securescan/requirements.txt
+          echo "✅ SecureScan installed"
+
+      - name: Create reports directory
+        run: mkdir -p reports
+
+      - name: Run SecureScan
+        id: scan
+        run: |
+          FAIL_ON="${{ github.event.inputs.fail_on || env.FAIL_ON }}"
+
+          cd /tmp/securescan
+          python -m cli.main scan "${{ github.workspace }}/${{ env.SCAN_PATH }}" \
+            --json   "${{ github.workspace }}/reports/securescan.json" \
+            --sarif  "${{ github.workspace }}/reports/securescan.sarif" \
+            --html   "${{ github.workspace }}/reports/securescan.html" \
+            --compliance "${{ github.workspace }}/reports/cis-compliance.txt" \
+            --fail-on "$FAIL_ON" \
+            --no-banner \
+          && echo "SCAN_PASSED=true" >> $GITHUB_ENV \
+          || echo "SCAN_PASSED=false" >> $GITHUB_ENV
+
+          # Зчитуємо результати
+          if [ -f "${{ github.workspace }}/reports/securescan.json" ]; then
+            python3 - << 'PYEOF'
+          import json, os
+          d = json.load(open(os.environ['GITHUB_WORKSPACE'] + '/reports/securescan.json'))
+          s = d.get('summary', {})
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"total={d.get('total_issues',0)}\n")
+              f.write(f"critical={s.get('CRITICAL',0)}\n")
+              f.write(f"high={s.get('HIGH',0)}\n")
+              f.write(f"passed={str(d.get('passed',False)).lower()}\n")
+              f.write(f"scan_id={d.get('scan_id','')}\n")
+
+          # Job summary
+          passed = '✅ PASSED' if d.get('passed') else '❌ FAILED'
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write(f"## 🔒 SecureScan — {passed}\n\n")
+              f.write("| Severity | Count |\n|----------|-------|\n")
+              for sev in ['CRITICAL','HIGH','MEDIUM','LOW']:
+                  f.write(f"| {sev} | {s.get(sev,0)} |\n")
+              f.write(f"| **Total** | **{d.get('total_issues',0)}** |\n\n")
+              f.write(f"Scan ID: `{d.get('scan_id','')}` · Files: {d.get('total_files',0)}\n")
+          PYEOF
+          fi
+        env:
+          PYTHONPATH: /tmp/securescan
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('reports/securescan.sarif') != ''
+        with:
+          sarif_file: reports/securescan.sarif
+          category: securescan
+
+      - name: Upload reports as artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: securescan-${{ github.run_number }}
+          path: |
+            reports/securescan.json
+            reports/securescan.html
+            reports/cis-compliance.txt
+          retention-days: 30
+
+      - name: Comment PR with results
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request' && always()
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## 🔒 SecureScan Security Report\n\n';
+            try {
+              const d = JSON.parse(fs.readFileSync('reports/securescan.json'));
+              const s = d.summary || {};
+              body += d.passed
+                ? '✅ **PASSED** — No critical or high issues found\n\n'
+                : '❌ **FAILED** — Security issues detected\n\n';
+              body += '| Severity | Count |\n|----------|-------|\n';
+              for (const sev of ['CRITICAL','HIGH','MEDIUM','LOW'])
+                body += `| ${sev} | ${s[sev]||0} |\n`;
+              body += `| **Total** | **${d.total_issues}** |\n\n`;
+              body += `Scan ID: \`${d.scan_id}\` · Files: ${d.total_files}\n`;
+            } catch(e) {
+              body += '⚠️ Could not parse scan results\n';
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+      - name: Fail if issues found
+        if: env.SCAN_PASSED == 'false'
+        run: |
+          echo "❌ SecureScan found security issues."
+          echo "Check Security tab → Code scanning for details."
+          echo "Or download the HTML report from artifacts."
+          exit 1
