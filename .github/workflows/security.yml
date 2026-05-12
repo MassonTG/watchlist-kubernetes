@@ -73,15 +73,6 @@ jobs:
         run: mkdir -p reports
 
 
-      - name: Debug
-        run: |
-          echo "PYTHONPATH test:"
-          PYTHONPATH=$GITHUB_WORKSPACE/securescan python3 -c "from core.report import to_json; print('core OK')" || echo "FAILED"
-          echo "securescan/core contents:"
-          ls $GITHUB_WORKSPACE/securescan/core/
-          echo "site-packages:"
-          pip show securescan 2>/dev/null | grep Location || echo "not found"
-
       - name: Run SecureScan
         id: scan
         run: |
