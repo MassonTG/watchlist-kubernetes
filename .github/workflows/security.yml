@@ -77,17 +77,18 @@ jobs:
         run: |
           FAIL_ON="${{ github.event.inputs.fail_on || env.FAIL_ON }}"
 
-          cd "${{ github.workspace }}/securescan" &&           python cli/main.py scan             "${{ github.workspace }}/${{ env.SCAN_PATH }}" \
-            --json   "${{ github.workspace }}/reports/securescan.json" \
-            --sarif  "${{ github.workspace }}/reports/securescan.sarif" \
-            --html   "${{ github.workspace }}/reports/securescan.html" \
-            --compliance "${{ github.workspace }}/reports/cis-compliance.txt" \
+          cd $GITHUB_WORKSPACE/securescan
+          python cli/main.py scan             "$GITHUB_WORKSPACE/${{ env.SCAN_PATH }}" \
+            --json   "$GITHUB_WORKSPACE/reports/securescan.json" \
+            --sarif  "$GITHUB_WORKSPACE/reports/securescan.sarif" \
+            --html   "$GITHUB_WORKSPACE/reports/securescan.html" \
+            --compliance "$GITHUB_WORKSPACE/reports/cis-compliance.txt" \
             --fail-on "$FAIL_ON" \
             --no-banner \
           && echo "SCAN_PASSED=true" >> $GITHUB_ENV \
           || echo "SCAN_PASSED=false" >> $GITHUB_ENV
 
-          if [ -f "${{ github.workspace }}/reports/securescan.json" ]; then
+          if [ -f "$GITHUB_WORKSPACE/reports/securescan.json" ]; then
             python3 - << 'PYEOF'
           import json, os
           d = json.load(open(os.environ['GITHUB_WORKSPACE'] + '/reports/securescan.json'))
