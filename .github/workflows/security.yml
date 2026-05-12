@@ -74,6 +74,7 @@ jobs:
 
       - name: Run SecureScan
         id: scan
+        working-directory: ${{ github.workspace }}/securescan
         run: |
           FAIL_ON="${{ github.event.inputs.fail_on || env.FAIL_ON }}"
 
