@@ -77,7 +77,7 @@ jobs:
         run: |
           FAIL_ON="${{ github.event.inputs.fail_on || env.FAIL_ON }}"
 
-          python -m cli.main scan             "${{ github.workspace }}/${{ env.SCAN_PATH }}" \
+          cd "${{ github.workspace }}/securescan" &&           python cli/main.py scan             "${{ github.workspace }}/${{ env.SCAN_PATH }}" \
             --json   "${{ github.workspace }}/reports/securescan.json" \
             --sarif  "${{ github.workspace }}/reports/securescan.sarif" \
             --html   "${{ github.workspace }}/reports/securescan.html" \
