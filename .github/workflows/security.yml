@@ -66,11 +66,16 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
-      # Клонуємо SecureScan окремо — не залежить від того
-      # чи є він у репозиторії користувача
+      # Клонуємо SecureScan через actions/checkout
+      - name: Checkout SecureScan
+        uses: actions/checkout@v4
+        with:
+          repository: MassonTG/securescan
+          path: /tmp/securescan
+          ref: main
+
       - name: Install SecureScan
         run: |
-          git clone --depth=1 ${{ env.SECURESCAN_REPO }} /tmp/securescan
           pip install --quiet -r /tmp/securescan/requirements.txt
           echo "✅ SecureScan installed"
 
