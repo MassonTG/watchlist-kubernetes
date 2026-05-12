@@ -66,17 +66,17 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
-      # Клонуємо SecureScan через actions/checkout
+      # Клонуємо SecureScan в підпапку workspace
       - name: Checkout SecureScan
         uses: actions/checkout@v4
         with:
           repository: MassonTG/securescan
-          path: /tmp/securescan
+          path: securescan
           ref: main
 
       - name: Install SecureScan
         run: |
-          pip install --quiet -r /tmp/securescan/requirements.txt
+          pip install --quiet -r securescan/requirements.txt
           echo "✅ SecureScan installed"
 
       - name: Create reports directory
@@ -87,7 +87,7 @@ jobs:
         run: |
           FAIL_ON="${{ github.event.inputs.fail_on || env.FAIL_ON }}"
 
-          cd /tmp/securescan
+          cd ${{ github.workspace }}/securescan
           python -m cli.main scan "${{ github.workspace }}/${{ env.SCAN_PATH }}" \
             --json   "${{ github.workspace }}/reports/securescan.json" \
             --sarif  "${{ github.workspace }}/reports/securescan.sarif" \
@@ -124,7 +124,7 @@ jobs:
           PYEOF
           fi
         env:
-          PYTHONPATH: /tmp/securescan
+          PYTHONPATH: ${{ github.workspace }}/securescan
 
       - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
