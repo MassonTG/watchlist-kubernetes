@@ -22,12 +22,6 @@ on:
       - '**/docker-compose*'
   pull_request:
     branches: [ main, master, develop ]
-    paths:
-      - '**/Dockerfile*'
-      - '**/*.yaml'
-      - '**/*.yml'
-      - '**/.env*'
-      - '**/docker-compose*'
   workflow_dispatch:
     inputs:
       fail_on:
@@ -40,12 +34,8 @@ on:
     - cron: '0 8 * * 1'
 
 env:
-  # ── Налаштуй під свій проєкт ──────────────────────────────────────
-  SCAN_PATH: "."          # що сканувати (. = весь репозиторій)
-  FAIL_ON: "high"         # critical / high / medium / low
-  SECURESCAN_REPO: "https://github.com/MassonTG/securescan"
-  SECURESCAN_VERSION: "main"
-  # ─────────────────────────────────────────────────────────────────
+  SCAN_PATH: "."
+  FAIL_ON: "high"
 
 jobs:
   securescan:
@@ -57,7 +47,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Checkout target repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python 3.12
@@ -66,18 +56,18 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
-      # Клонуємо SecureScan в підпапку workspace
+      - name: Install SecureScan dependencies
+        run: |
+          pip install --quiet pyyaml typer uvicorn fastapi starlette python-multipart
+          echo "✅ Dependencies installed"
+
       - name: Checkout SecureScan
         uses: actions/checkout@v4
         with:
           repository: MassonTG/securescan
           path: securescan
           ref: main
-
-      - name: Install SecureScan
-        run: |
-          pip install --quiet -r securescan/requirements.txt
-          echo "✅ SecureScan installed"
+          token: ${{ secrets.SECURESCAN_TOKEN }}
 
       - name: Create reports directory
         run: mkdir -p reports
@@ -98,7 +88,6 @@ jobs:
           && echo "SCAN_PASSED=true" >> $GITHUB_ENV \
           || echo "SCAN_PASSED=false" >> $GITHUB_ENV
 
-          # Зчитуємо результати
           if [ -f "${{ github.workspace }}/reports/securescan.json" ]; then
             python3 - << 'PYEOF'
           import json, os
@@ -112,7 +101,6 @@ jobs:
               f.write(f"passed={str(d.get('passed',False)).lower()}\n")
               f.write(f"scan_id={d.get('scan_id','')}\n")
 
-          # Job summary
           passed = '✅ PASSED' if d.get('passed') else '❌ FAILED'
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
               f.write(f"## 🔒 SecureScan — {passed}\n\n")
@@ -176,6 +164,5 @@ jobs:
         if: env.SCAN_PASSED == 'false'
         run: |
           echo "❌ SecureScan found security issues."
-          echo "Check Security tab → Code scanning for details."
-          echo "Or download the HTML report from artifacts."
+          echo "Check Security tab and artifacts for details."
           exit 1
