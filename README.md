@@ -65,3 +65,4 @@ Open http://<public_ip>:30080
 ```bash
 terraform destroy -auto-approve
 ```
+# SecureScan CI integrated
